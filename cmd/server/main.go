@@ -54,6 +54,7 @@ func main() {
 	r.Get("/log", logH.GetLog)
 
 	r.Post("/chaos", handler.Chaos)
+	r.Get("/health", handler.Health)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", *port),
