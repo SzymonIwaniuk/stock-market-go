@@ -25,4 +25,6 @@ type Store interface {
 	ExecuteTrade(ctx context.Context, walletID, stockName, tradeType string) error
 
 	GetLog(ctx context.Context) ([]model.LogEntry, error)
+
+	Flush(ctx context.Context) error
 }

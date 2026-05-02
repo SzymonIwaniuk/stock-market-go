@@ -70,6 +70,10 @@ func (s *RedisStore) Ping(ctx context.Context) error {
 	return s.client.Ping(ctx).Err()
 }
 
+func (s *RedisStore) Flush(ctx context.Context) error {
+	return s.client.FlushDB(ctx).Err()
+}
+
 func (s *RedisStore) SetBankStocks(ctx context.Context, stocks []model.Stock) error {
 	pipe := s.client.TxPipeline()
 	pipe.Del(ctx, bankStocksKey)

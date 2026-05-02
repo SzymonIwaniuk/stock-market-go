@@ -53,8 +53,11 @@ func main() {
 
 	r.Get("/log", logH.GetLog)
 
+	resetH := handler.NewResetHandler(redisStore)
+
 	r.Post("/chaos", handler.Chaos)
 	r.Get("/health", handler.Health)
+	r.Post("/reset", resetH.Reset)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", *port),
