@@ -19,7 +19,7 @@ func NewStockHandler(s store.Store) *StockHandler {
 func (h *StockHandler) GetStocks(w http.ResponseWriter, r *http.Request) {
 	stocks, err := h.store.GetBankStocks(r.Context())
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -30,12 +30,12 @@ func (h *StockHandler) GetStocks(w http.ResponseWriter, r *http.Request) {
 func (h *StockHandler) SetStocks(w http.ResponseWriter, r *http.Request) {
 	var req model.BankState
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if err := h.store.SetBankStocks(r.Context(), req.Stocks); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 

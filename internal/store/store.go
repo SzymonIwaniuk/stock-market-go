@@ -21,7 +21,6 @@ type Store interface {
 	GetWallet(ctx context.Context, walletID string) (*model.WalletResponse, error)
 	GetWalletStock(ctx context.Context, walletID, stockName string) (int, error)
 
-	// ExecuteTrade atomically performs a buy or sell, updating bank, wallet, and audit log.
 	ExecuteTrade(ctx context.Context, walletID, stockName, tradeType string) error
 
 	GetLog(ctx context.Context) ([]model.LogEntry, error)

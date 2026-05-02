@@ -25,12 +25,12 @@ func (h *WalletHandler) Trade(w http.ResponseWriter, r *http.Request) {
 
 	var req model.TradeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if req.Type != "buy" && req.Type != "sell" {
-		http.Error(w, "type must be 'buy' or 'sell'", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "type must be 'buy' or 'sell'")
 		return
 	}
 
@@ -38,13 +38,13 @@ func (h *WalletHandler) Trade(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrStockNotFound):
-			http.Error(w, "stock not found", http.StatusNotFound)
+			writeError(w, http.StatusNotFound, "stock not found")
 		case errors.Is(err, store.ErrInsufficientBank):
-			http.Error(w, "no stock available in bank", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "no stock available in bank")
 		case errors.Is(err, store.ErrInsufficientWallet):
-			http.Error(w, "no stock available in wallet", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "no stock available in wallet")
 		default:
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
@@ -57,7 +57,7 @@ func (h *WalletHandler) GetWallet(w http.ResponseWriter, r *http.Request) {
 
 	wallet, err := h.store.GetWallet(r.Context(), walletID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -71,7 +71,7 @@ func (h *WalletHandler) GetWalletStock(w http.ResponseWriter, r *http.Request) {
 
 	qty, err := h.store.GetWalletStock(r.Context(), walletID, stockName)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 

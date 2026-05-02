@@ -16,7 +16,7 @@ func NewResetHandler(s store.Store) *ResetHandler {
 
 func (h *ResetHandler) Reset(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.Flush(r.Context()); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)

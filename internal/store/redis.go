@@ -19,9 +19,6 @@ func walletKey(walletID string) string {
 	return fmt.Sprintf("wallet:%s:stocks", walletID)
 }
 
-// Lua script for atomic buy: decrement bank, increment wallet, append audit log.
-// KEYS[1] = bank:stocks, KEYS[2] = wallet:<id>:stocks, KEYS[3] = audit_log
-// ARGV[1] = stock_name, ARGV[2] = wallet_id, ARGV[3] = log entry JSON
 var buyScript = redis.NewScript(`
 local bank_qty = tonumber(redis.call('HGET', KEYS[1], ARGV[1])) or -1
 if bank_qty == -1 then
@@ -36,9 +33,6 @@ redis.call('RPUSH', KEYS[3], ARGV[3])
 return 1
 `)
 
-// Lua script for atomic sell: decrement wallet, increment bank, append audit log.
-// KEYS[1] = bank:stocks, KEYS[2] = wallet:<id>:stocks, KEYS[3] = audit_log
-// ARGV[1] = stock_name, ARGV[2] = wallet_id, ARGV[3] = log entry JSON
 var sellScript = redis.NewScript(`
 local exists = redis.call('HEXISTS', KEYS[1], ARGV[1])
 if exists == 0 then

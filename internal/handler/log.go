@@ -19,7 +19,7 @@ func NewLogHandler(s store.Store) *LogHandler {
 func (h *LogHandler) GetLog(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.store.GetLog(r.Context())
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 

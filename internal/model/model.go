@@ -27,3 +27,8 @@ type LogResponse struct {
 type TradeRequest struct {
 	Type string `json:"type"`
 }
+
+type ErrResponse struct {
+	HTTPStatusCode int
+	Message        string
+}
