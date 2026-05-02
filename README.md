@@ -140,10 +140,20 @@ curl -X POST http://localhost:8080/chaos
 
 ## Running Tests
 
-Tests use [miniredis](https://github.com/alicebob/miniredis) — a pure Go in-memory Redis server. No external dependencies needed.
+### Unit tests
+
+Uses [miniredis](https://github.com/alicebob/miniredis) -- a pure Go in-memory Redis server. No external dependencies needed.
 
 ```bash
 go test ./... -v
+```
+
+### End-to-end tests
+
+Requires the service to be running (via `go run start.go <PORT>`). Tests hit the live API using [testify/suite](https://github.com/stretchr/testify).
+
+```bash
+PORT=8080 go test ./e2e_tests/ -tags=e2e -v
 ```
 
 ## Project Structure
@@ -151,10 +161,11 @@ go test ./... -v
 ```
 ├── cmd/server/main.go          Entry point, routing, graceful shutdown
 ├── internal/
-│   ├── handler/                HTTP handlers (wallet, stock, log, chaos)
+│   ├── handler/                HTTP handlers (wallet, stock, log, chaos, health, reset)
 │   ├── model/                  Domain types and DTOs
 │   ├── store/                  Store interface + Redis implementation
 │   └── middleware/             Request logging
+├── e2e_tests/                  End-to-end API tests (build tag: e2e)
 ├── nginx/nginx.conf            Nginx reverse proxy config
 ├── docker-compose.yml          3 app instances + nginx + redis
 ├── Dockerfile                  Multi-stage Go build
