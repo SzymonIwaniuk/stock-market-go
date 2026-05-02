@@ -1,3 +1,5 @@
+//go:build unit
+
 package handler_test
 
 import (
@@ -10,6 +12,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/szymoniwaniuk/stock-market-go/internal/handler"
 	"github.com/szymoniwaniuk/stock-market-go/internal/model"
 	"github.com/szymoniwaniuk/stock-market-go/internal/store"
@@ -36,9 +40,17 @@ func setup(t *testing.T) (*chi.Mux, *store.RedisStore) {
 
 func seedBank(t *testing.T, s *store.RedisStore, stocks []model.Stock) {
 	t.Helper()
-	if err := s.SetBankStocks(context.Background(), stocks); err != nil {
-		t.Fatalf("failed to seed bank: %v", err)
-	}
+	err := s.SetBankStocks(context.Background(), stocks)
+	require.NoError(t, err, "failed to seed bank")
+}
+
+func doTrade(t *testing.T, r *chi.Mux, walletID, stockName, tradeType string) *httptest.ResponseRecorder {
+	t.Helper()
+	body := `{"type":"` + tradeType + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/wallets/"+walletID+"/stocks/"+stockName, bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
 }
 
 func TestSetAndGetStocks(t *testing.T) {
@@ -48,72 +60,79 @@ func TestSetAndGetStocks(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/stocks", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("POST /stocks: expected 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	req = httptest.NewRequest(http.MethodGet, "/stocks", nil)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("GET /stocks: expected 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var bankState model.BankState
-	json.NewDecoder(w.Body).Decode(&bankState)
-
-	if len(bankState.Stocks) != 2 {
-		t.Fatalf("expected 2 stocks, got %d", len(bankState.Stocks))
-	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&bankState))
+	assert.Len(t, bankState.Stocks, 2)
 }
 
-func TestBuySuccess(t *testing.T) {
-	r, s := setup(t)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
-
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+func TestTrade(t *testing.T) {
+	tests := []struct {
+		name           string
+		bankStocks     []model.Stock
+		walletID       string
+		stockName      string
+		tradeType      string
+		expectedStatus int
+	}{
+		{
+			name:           "buy success",
+			bankStocks:     []model.Stock{{Name: "AAPL", Quantity: 5}},
+			walletID:       "w1",
+			stockName:      "AAPL",
+			tradeType:      "buy",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "buy stock not found",
+			bankStocks:     nil,
+			walletID:       "w1",
+			stockName:      "NOPE",
+			tradeType:      "buy",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "buy insufficient bank",
+			bankStocks:     []model.Stock{{Name: "AAPL", Quantity: 0}},
+			walletID:       "w1",
+			stockName:      "AAPL",
+			tradeType:      "buy",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "sell insufficient wallet",
+			bankStocks:     []model.Stock{{Name: "AAPL", Quantity: 5}},
+			walletID:       "w1",
+			stockName:      "AAPL",
+			tradeType:      "sell",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid trade type",
+			bankStocks:     []model.Stock{{Name: "AAPL", Quantity: 5}},
+			walletID:       "w1",
+			stockName:      "AAPL",
+			tradeType:      "invalid",
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/wallets/w1/stocks/AAPL", nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	if w.Body.String() != "1" {
-		t.Fatalf("expected wallet stock qty 1, got %s", w.Body.String())
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, s := setup(t)
+			if tt.bankStocks != nil {
+				seedBank(t, s, tt.bankStocks)
+			}
 
-func TestBuyStockNotFound(t *testing.T) {
-	r, _ := setup(t)
-
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/NOPE", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestBuyInsufficientBank(t *testing.T) {
-	r, s := setup(t)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 0}})
-
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+			w := doTrade(t, r, tt.walletID, tt.stockName, tt.tradeType)
+			assert.Equal(t, tt.expectedStatus, w.Code)
+		})
 	}
 }
 
@@ -121,216 +140,153 @@ func TestSellSuccess(t *testing.T) {
 	r, s := setup(t)
 	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
 
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("buy failed: %d", w.Code)
-	}
+	w := doTrade(t, r, "w1", "AAPL", "buy")
+	require.Equal(t, http.StatusOK, w.Code)
 
-	body = `{"type":"sell"}`
-	req = httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestSellInsufficientWallet(t *testing.T) {
-	r, s := setup(t)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
-
-	body := `{"type":"sell"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestGetWallet(t *testing.T) {
-	r, s := setup(t)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
-
-	for i := 0; i < 3; i++ {
-		body := `{"type":"buy"}`
-		req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			t.Fatalf("buy %d failed: %d", i, w.Code)
-		}
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/wallets/w1", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var wallet model.WalletResponse
-	json.NewDecoder(w.Body).Decode(&wallet)
-
-	if wallet.ID != "w1" {
-		t.Fatalf("expected wallet id w1, got %s", wallet.ID)
-	}
-	if len(wallet.Stocks) != 1 || wallet.Stocks[0].Quantity != 3 {
-		t.Fatalf("expected 1 stock with qty 3, got %+v", wallet.Stocks)
-	}
-}
-
-func TestAuditLog(t *testing.T) {
-	r, s := setup(t)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
-
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	body = `{"type":"sell"}`
-	req = httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	req = httptest.NewRequest(http.MethodGet, "/log", nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var logResp model.LogResponse
-	json.NewDecoder(w.Body).Decode(&logResp)
-
-	if len(logResp.Log) != 2 {
-		t.Fatalf("expected 2 log entries, got %d", len(logResp.Log))
-	}
-	if logResp.Log[0].Type != "buy" {
-		t.Fatalf("expected first entry type buy, got %s", logResp.Log[0].Type)
-	}
-	if logResp.Log[1].Type != "sell" {
-		t.Fatalf("expected second entry type sell, got %s", logResp.Log[1].Type)
-	}
-}
-
-func TestInvalidTradeType(t *testing.T) {
-	r, s := setup(t)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
-
-	body := `{"type":"invalid"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestGetWalletNonExistent(t *testing.T) {
-	r, _ := setup(t)
-
-	req := httptest.NewRequest(http.MethodGet, "/wallets/nonexistent", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var wallet model.WalletResponse
-	json.NewDecoder(w.Body).Decode(&wallet)
-
-	if wallet.ID != "nonexistent" {
-		t.Fatalf("expected id nonexistent, got %s", wallet.ID)
-	}
-	if len(wallet.Stocks) != 0 {
-		t.Fatalf("expected empty stocks, got %+v", wallet.Stocks)
-	}
-}
-
-func TestFailedOperationsNotLogged(t *testing.T) {
-	r, s := setup(t)
-
-	// Buy a non-existent stock (404)
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/NOPE", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	// Buy with zero bank quantity (400)
-	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 0}})
-	body = `{"type":"buy"}`
-	req = httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	req = httptest.NewRequest(http.MethodGet, "/log", nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	var logResp model.LogResponse
-	json.NewDecoder(w.Body).Decode(&logResp)
-
-	if len(logResp.Log) != 0 {
-		t.Fatalf("expected 0 log entries for failed ops, got %d", len(logResp.Log))
-	}
+	w = doTrade(t, r, "w1", "AAPL", "sell")
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestBuyDecrementsBank(t *testing.T) {
 	r, s := setup(t)
 	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 3}})
 
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := doTrade(t, r, "w1", "AAPL", "buy")
+	require.Equal(t, http.StatusOK, w.Code)
 
-	req = httptest.NewRequest(http.MethodGet, "/stocks", nil)
+	req := httptest.NewRequest(http.MethodGet, "/stocks", nil)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	var bank model.BankState
-	json.NewDecoder(w.Body).Decode(&bank)
-
-	if len(bank.Stocks) != 1 || bank.Stocks[0].Quantity != 2 {
-		t.Fatalf("expected bank AAPL qty 2, got %+v", bank.Stocks)
-	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&bank))
+	require.Len(t, bank.Stocks, 1)
+	assert.Equal(t, 2, bank.Stocks[0].Quantity)
 }
 
 func TestSellIncrementsBank(t *testing.T) {
 	r, s := setup(t)
 	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 3}})
 
-	// Buy first
-	body := `{"type":"buy"}`
-	req := httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := doTrade(t, r, "w1", "AAPL", "buy")
+	require.Equal(t, http.StatusOK, w.Code)
 
-	// Sell back
-	body = `{"type":"sell"}`
-	req = httptest.NewRequest(http.MethodPost, "/wallets/w1/stocks/AAPL", bytes.NewBufferString(body))
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w = doTrade(t, r, "w1", "AAPL", "sell")
+	require.Equal(t, http.StatusOK, w.Code)
 
-	req = httptest.NewRequest(http.MethodGet, "/stocks", nil)
+	req := httptest.NewRequest(http.MethodGet, "/stocks", nil)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	var bank model.BankState
-	json.NewDecoder(w.Body).Decode(&bank)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&bank))
+	require.Len(t, bank.Stocks, 1)
+	assert.Equal(t, 3, bank.Stocks[0].Quantity)
+}
 
-	if len(bank.Stocks) != 1 || bank.Stocks[0].Quantity != 3 {
-		t.Fatalf("expected bank AAPL qty 3 after buy+sell, got %+v", bank.Stocks)
+func TestGetWallet(t *testing.T) {
+	tests := []struct {
+		name          string
+		walletID      string
+		buyCount      int
+		expectedID    string
+		expectedStock int
+	}{
+		{
+			name:          "wallet with stocks",
+			walletID:      "w1",
+			buyCount:      3,
+			expectedID:    "w1",
+			expectedStock: 3,
+		},
+		{
+			name:          "non-existent wallet",
+			walletID:      "nonexistent",
+			buyCount:      0,
+			expectedID:    "nonexistent",
+			expectedStock: 0,
+		},
 	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, s := setup(t)
+			seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
+
+			for i := 0; i < tt.buyCount; i++ {
+				w := doTrade(t, r, tt.walletID, "AAPL", "buy")
+				require.Equal(t, http.StatusOK, w.Code)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/wallets/"+tt.walletID, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+
+			var wallet model.WalletResponse
+			require.NoError(t, json.NewDecoder(w.Body).Decode(&wallet))
+			assert.Equal(t, tt.expectedID, wallet.ID)
+
+			if tt.expectedStock == 0 {
+				assert.Empty(t, wallet.Stocks)
+			} else {
+				require.Len(t, wallet.Stocks, 1)
+				assert.Equal(t, tt.expectedStock, wallet.Stocks[0].Quantity)
+			}
+		})
+	}
+}
+
+func TestGetWalletStock(t *testing.T) {
+	r, s := setup(t)
+	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
+
+	w := doTrade(t, r, "w1", "AAPL", "buy")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest(http.MethodGet, "/wallets/w1/stocks/AAPL", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "1", w.Body.String())
+}
+
+func TestAuditLog(t *testing.T) {
+	r, s := setup(t)
+	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 5}})
+
+	w := doTrade(t, r, "w1", "AAPL", "buy")
+	require.Equal(t, http.StatusOK, w.Code)
+	w = doTrade(t, r, "w1", "AAPL", "sell")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req := httptest.NewRequest(http.MethodGet, "/log", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var logResp model.LogResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&logResp))
+	require.Len(t, logResp.Log, 2)
+	assert.Equal(t, "buy", logResp.Log[0].Type)
+	assert.Equal(t, "sell", logResp.Log[1].Type)
+}
+
+func TestFailedOperationsNotLogged(t *testing.T) {
+	r, s := setup(t)
+
+	doTrade(t, r, "w1", "NOPE", "buy")
+
+	seedBank(t, s, []model.Stock{{Name: "AAPL", Quantity: 0}})
+	doTrade(t, r, "w1", "AAPL", "buy")
+
+	req := httptest.NewRequest(http.MethodGet, "/log", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var logResp model.LogResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&logResp))
+	assert.Empty(t, logResp.Log)
 }
