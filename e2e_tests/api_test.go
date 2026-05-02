@@ -15,35 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/szymoniwaniuk/stock-market-go/internal/model"
 )
-
-type Stock struct {
-	Name     string `json:"name"`
-	Quantity int    `json:"quantity"`
-}
-
-type BankState struct {
-	Stocks []Stock `json:"stocks"`
-}
-
-type WalletResponse struct {
-	ID     string  `json:"id"`
-	Stocks []Stock `json:"stocks"`
-}
-
-type LogEntry struct {
-	Type      string `json:"type"`
-	WalletID  string `json:"wallet_id"`
-	StockName string `json:"stock_name"`
-}
-
-type LogResponse struct {
-	Log []LogEntry `json:"log"`
-}
-
-type TradeRequest struct {
-	Type string `json:"type"`
-}
 
 type E2ETestSuite struct {
 	suite.Suite
@@ -106,7 +79,7 @@ func (s *E2ETestSuite) readBody(resp *http.Response) string {
 // --- Bank Tests ---
 
 func (s *E2ETestSuite) TestSetAndGetBankStocks() {
-	stocks := BankState{Stocks: []Stock{
+	stocks := model.BankState{Stocks: []model.Stock{
 		{Name: "AAPL", Quantity: 100},
 		{Name: "GOOG", Quantity: 50},
 	}}
@@ -116,7 +89,7 @@ func (s *E2ETestSuite) TestSetAndGetBankStocks() {
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
 	resp = s.get("/stocks")
-	var bank BankState
+	var bank model.BankState
 	json.NewDecoder(resp.Body).Decode(&bank)
 	resp.Body.Close()
 
@@ -132,14 +105,14 @@ func (s *E2ETestSuite) TestSetAndGetBankStocks() {
 }
 
 func (s *E2ETestSuite) TestSetBankOverwritesPreviousState() {
-	resp := s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}})
+	resp := s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}})
 	resp.Body.Close()
 
-	resp = s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "GOOG", Quantity: 5}}})
+	resp = s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "GOOG", Quantity: 5}}})
 	resp.Body.Close()
 
 	resp = s.get("/stocks")
-	var bank BankState
+	var bank model.BankState
 	json.NewDecoder(resp.Body).Decode(&bank)
 	resp.Body.Close()
 
@@ -150,7 +123,7 @@ func (s *E2ETestSuite) TestSetBankOverwritesPreviousState() {
 
 func (s *E2ETestSuite) TestEmptyBankInitially() {
 	resp := s.get("/stocks")
-	var bank BankState
+	var bank model.BankState
 	json.NewDecoder(resp.Body).Decode(&bank)
 	resp.Body.Close()
 
@@ -161,9 +134,9 @@ func (s *E2ETestSuite) TestEmptyBankInitially() {
 // --- Buy Tests ---
 
 func (s *E2ETestSuite) TestBuySuccess() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
 
-	resp := s.postJSON("/wallets/wallet1/stocks/AAPL", TradeRequest{Type: "buy"})
+	resp := s.postJSON("/wallets/wallet1/stocks/AAPL", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
@@ -174,35 +147,35 @@ func (s *E2ETestSuite) TestBuySuccess() {
 
 	// Bank should have 9
 	resp = s.get("/stocks")
-	var bank BankState
+	var bank model.BankState
 	json.NewDecoder(resp.Body).Decode(&bank)
 	resp.Body.Close()
 	assert.Equal(s.T(), 9, bank.Stocks[0].Quantity)
 }
 
 func (s *E2ETestSuite) TestBuyStockNotFound() {
-	resp := s.postJSON("/wallets/wallet1/stocks/NONEXISTENT", TradeRequest{Type: "buy"})
+	resp := s.postJSON("/wallets/wallet1/stocks/NONEXISTENT", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusNotFound, resp.StatusCode)
 }
 
 func (s *E2ETestSuite) TestBuyInsufficientBankStock() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 0}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 0}}}).Body.Close()
 
-	resp := s.postJSON("/wallets/wallet1/stocks/AAPL", TradeRequest{Type: "buy"})
+	resp := s.postJSON("/wallets/wallet1/stocks/AAPL", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusBadRequest, resp.StatusCode)
 }
 
 func (s *E2ETestSuite) TestBuyCreatesWalletAutomatically() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 5}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 5}}}).Body.Close()
 
-	resp := s.postJSON("/wallets/new_wallet/stocks/AAPL", TradeRequest{Type: "buy"})
+	resp := s.postJSON("/wallets/new_wallet/stocks/AAPL", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
 	resp = s.get("/wallets/new_wallet")
-	var wallet WalletResponse
+	var wallet model.WalletResponse
 	json.NewDecoder(resp.Body).Decode(&wallet)
 	resp.Body.Close()
 
@@ -213,17 +186,17 @@ func (s *E2ETestSuite) TestBuyCreatesWalletAutomatically() {
 }
 
 func (s *E2ETestSuite) TestBuyMultipleStocks() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{
 		{Name: "AAPL", Quantity: 10},
 		{Name: "GOOG", Quantity: 5},
 	}}).Body.Close()
 
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/GOOG", TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/GOOG", model.TradeRequest{Type: "buy"}).Body.Close()
 
 	resp := s.get("/wallets/w1")
-	var wallet WalletResponse
+	var wallet model.WalletResponse
 	json.NewDecoder(resp.Body).Decode(&wallet)
 	resp.Body.Close()
 
@@ -238,10 +211,10 @@ func (s *E2ETestSuite) TestBuyMultipleStocks() {
 // --- Sell Tests ---
 
 func (s *E2ETestSuite) TestSellSuccess() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
 
-	resp := s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "sell"})
+	resp := s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "sell"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
@@ -252,22 +225,22 @@ func (s *E2ETestSuite) TestSellSuccess() {
 
 	// Bank should be back to 10
 	resp = s.get("/stocks")
-	var bank BankState
+	var bank model.BankState
 	json.NewDecoder(resp.Body).Decode(&bank)
 	resp.Body.Close()
 	assert.Equal(s.T(), 10, bank.Stocks[0].Quantity)
 }
 
 func (s *E2ETestSuite) TestSellInsufficientWalletStock() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
 
-	resp := s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "sell"})
+	resp := s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "sell"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusBadRequest, resp.StatusCode)
 }
 
 func (s *E2ETestSuite) TestSellStockNotFound() {
-	resp := s.postJSON("/wallets/w1/stocks/NONEXISTENT", TradeRequest{Type: "sell"})
+	resp := s.postJSON("/wallets/w1/stocks/NONEXISTENT", model.TradeRequest{Type: "sell"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusNotFound, resp.StatusCode)
 }
@@ -276,7 +249,7 @@ func (s *E2ETestSuite) TestSellStockNotFound() {
 
 func (s *E2ETestSuite) TestGetNonExistentWallet() {
 	resp := s.get("/wallets/does_not_exist")
-	var wallet WalletResponse
+	var wallet model.WalletResponse
 	json.NewDecoder(resp.Body).Decode(&wallet)
 	resp.Body.Close()
 
@@ -286,10 +259,10 @@ func (s *E2ETestSuite) TestGetNonExistentWallet() {
 }
 
 func (s *E2ETestSuite) TestGetWalletStockQuantity() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
 
 	for i := 0; i < 3; i++ {
-		s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
+		s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
 	}
 
 	resp := s.get("/wallets/w1/stocks/AAPL")
@@ -306,14 +279,14 @@ func (s *E2ETestSuite) TestGetWalletStockZeroForUnowned() {
 // --- Audit Log Tests ---
 
 func (s *E2ETestSuite) TestAuditLogRecordsOperations() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
 
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
-	s.postJSON("/wallets/w2/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "sell"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w2/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "sell"}).Body.Close()
 
 	resp := s.get("/log")
-	var log LogResponse
+	var log model.LogResponse
 	json.NewDecoder(resp.Body).Decode(&log)
 	resp.Body.Close()
 
@@ -332,14 +305,14 @@ func (s *E2ETestSuite) TestAuditLogRecordsOperations() {
 
 func (s *E2ETestSuite) TestAuditLogDoesNotRecordFailedOperations() {
 	// These should all fail
-	s.postJSON("/wallets/w1/stocks/NOPE", TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/NOPE", model.TradeRequest{Type: "buy"}).Body.Close()
 
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 0}}}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "sell"}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 0}}}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "sell"}).Body.Close()
 
 	resp := s.get("/log")
-	var log LogResponse
+	var log model.LogResponse
 	json.NewDecoder(resp.Body).Decode(&log)
 	resp.Body.Close()
 
@@ -347,15 +320,15 @@ func (s *E2ETestSuite) TestAuditLogDoesNotRecordFailedOperations() {
 }
 
 func (s *E2ETestSuite) TestAuditLogOrderPreserved() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
 
 	for i := 0; i < 5; i++ {
 		walletID := fmt.Sprintf("w%d", i)
-		s.postJSON(fmt.Sprintf("/wallets/%s/stocks/AAPL", walletID), TradeRequest{Type: "buy"}).Body.Close()
+		s.postJSON(fmt.Sprintf("/wallets/%s/stocks/AAPL", walletID), model.TradeRequest{Type: "buy"}).Body.Close()
 	}
 
 	resp := s.get("/log")
-	var log LogResponse
+	var log model.LogResponse
 	json.NewDecoder(resp.Body).Decode(&log)
 	resp.Body.Close()
 
@@ -368,9 +341,9 @@ func (s *E2ETestSuite) TestAuditLogOrderPreserved() {
 // --- Invalid Request Tests ---
 
 func (s *E2ETestSuite) TestInvalidTradeType() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
 
-	resp := s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "hold"})
+	resp := s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "hold"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusBadRequest, resp.StatusCode)
 }
@@ -391,13 +364,13 @@ func (s *E2ETestSuite) TestInvalidJSONBody() {
 func (s *E2ETestSuite) TestFullAPIFlow() {
 	// 1. Bank starts empty
 	resp := s.get("/stocks")
-	var bank BankState
+	var bank model.BankState
 	json.NewDecoder(resp.Body).Decode(&bank)
 	resp.Body.Close()
 	assert.Empty(s.T(), bank.Stocks)
 
 	// 2. Set bank stocks
-	resp = s.postJSON("/stocks", BankState{Stocks: []Stock{
+	resp = s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{
 		{Name: "AAPL", Quantity: 5},
 		{Name: "GOOG", Quantity: 3},
 	}})
@@ -405,23 +378,23 @@ func (s *E2ETestSuite) TestFullAPIFlow() {
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
 	// 3. Buy AAPL for wallet1
-	resp = s.postJSON("/wallets/wallet1/stocks/AAPL", TradeRequest{Type: "buy"})
+	resp = s.postJSON("/wallets/wallet1/stocks/AAPL", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
 	// 4. Buy GOOG for wallet1
-	resp = s.postJSON("/wallets/wallet1/stocks/GOOG", TradeRequest{Type: "buy"})
+	resp = s.postJSON("/wallets/wallet1/stocks/GOOG", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
 	// 5. Buy AAPL for wallet2
-	resp = s.postJSON("/wallets/wallet2/stocks/AAPL", TradeRequest{Type: "buy"})
+	resp = s.postJSON("/wallets/wallet2/stocks/AAPL", model.TradeRequest{Type: "buy"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
 	// 6. Verify wallet1
 	resp = s.get("/wallets/wallet1")
-	var w1 WalletResponse
+	var w1 model.WalletResponse
 	json.NewDecoder(resp.Body).Decode(&w1)
 	resp.Body.Close()
 	assert.Equal(s.T(), "wallet1", w1.ID)
@@ -439,7 +412,7 @@ func (s *E2ETestSuite) TestFullAPIFlow() {
 	assert.Equal(s.T(), 2, bankMap["GOOG"])
 
 	// 8. Sell AAPL from wallet1 back
-	resp = s.postJSON("/wallets/wallet1/stocks/AAPL", TradeRequest{Type: "sell"})
+	resp = s.postJSON("/wallets/wallet1/stocks/AAPL", model.TradeRequest{Type: "sell"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusOK, resp.StatusCode)
 
@@ -460,7 +433,7 @@ func (s *E2ETestSuite) TestFullAPIFlow() {
 
 	// 11. Verify full audit log
 	resp = s.get("/log")
-	var log LogResponse
+	var log model.LogResponse
 	json.NewDecoder(resp.Body).Decode(&log)
 	resp.Body.Close()
 	assert.Len(s.T(), log.Log, 4)
@@ -470,7 +443,7 @@ func (s *E2ETestSuite) TestFullAPIFlow() {
 	assert.Equal(s.T(), "sell", log.Log[3].Type)
 
 	// 12. Try to sell again (should fail, wallet is empty for AAPL)
-	resp = s.postJSON("/wallets/wallet1/stocks/AAPL", TradeRequest{Type: "sell"})
+	resp = s.postJSON("/wallets/wallet1/stocks/AAPL", model.TradeRequest{Type: "sell"})
 	resp.Body.Close()
 	assert.Equal(s.T(), http.StatusBadRequest, resp.StatusCode)
 }
@@ -478,8 +451,8 @@ func (s *E2ETestSuite) TestFullAPIFlow() {
 // --- Chaos / HA Test ---
 
 func (s *E2ETestSuite) TestChaosServiceSurvives() {
-	s.postJSON("/stocks", BankState{Stocks: []Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
-	s.postJSON("/wallets/w1/stocks/AAPL", TradeRequest{Type: "buy"}).Body.Close()
+	s.postJSON("/stocks", model.BankState{Stocks: []model.Stock{{Name: "AAPL", Quantity: 10}}}).Body.Close()
+	s.postJSON("/wallets/w1/stocks/AAPL", model.TradeRequest{Type: "buy"}).Body.Close()
 
 	// Kill one instance
 	resp, err := s.client.Post(s.serverURL+"/chaos", "application/json", nil)
