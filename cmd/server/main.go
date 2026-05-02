@@ -44,17 +44,22 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.RequestLogger)
 
-	r.Post("/wallets/{wallet_id}/stocks/{stock_name}", walletH.Trade)
-	r.Get("/wallets/{wallet_id}", walletH.GetWallet)
-	r.Get("/wallets/{wallet_id}/stocks/{stock_name}", walletH.GetWalletStock)
-
-	r.Get("/stocks", stockH.GetStocks)
-	r.Post("/stocks", stockH.SetStocks)
-
-	r.Get("/log", logH.GetLog)
-
 	resetH := handler.NewResetHandler(redisStore)
 
+	r.Route("/wallets/{wallet_id}", func(r chi.Router) {
+		r.Get("/", walletH.GetWallet)
+		r.Route("/stocks/{stock_name}", func(r chi.Router) {
+			r.Post("/", walletH.Trade)
+			r.Get("/", walletH.GetWalletStock)
+		})
+	})
+
+	r.Route("/stocks", func(r chi.Router) {
+		r.Get("/", stockH.GetStocks)
+		r.Post("/", stockH.SetStocks)
+	})
+
+	r.Get("/log", logH.GetLog)
 	r.Post("/chaos", handler.Chaos)
 	r.Get("/health", handler.Health)
 	r.Post("/reset", resetH.Reset)
