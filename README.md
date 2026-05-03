@@ -1,5 +1,7 @@
 # Stock Market Service
 
+[![CI](https://github.com/szymoniwaniuk/stock-market-go/actions/workflows/ci.yml/badge.svg)](https://github.com/szymoniwaniuk/stock-market-go/actions/workflows/ci.yml)
+
 A simplified stock market REST API built in Go with Redis as a shared state store. Wallets can buy and sell stocks from a central Bank, with all successful operations recorded in an audit log.
 
 ## Table of Contents
@@ -15,7 +17,7 @@ A simplified stock market REST API built in Go with Redis as a shared state stor
 ## About the Project
 Stock Market Service simulates a simplified stock exchange. This service provides:
 - **Wallet Management**: Buy and sell stocks from a central bank with atomic operations
-- **High Availability**: 3 app instances behind Nginx — killing one doesn't take down the service
+- **High Availability**: 3 app instances behind Nginx - killing one doesn't take down the service
 - **Audit Logging**: All successful wallet operations are recorded in order of occurrence
 - **Cross-Platform**: Single startup command works on Windows, Linux, and macOS (x64 and arm64)
 
@@ -47,7 +49,7 @@ Trade operations are atomic via Redis Lua scripts, preventing race conditions ac
 - **Go** runtime (latest version)
 - **Docker** and Docker Compose — follow [this guide](https://docs.docker.com/get-docker/) to install
 
-### ⚠️ Warning: Port Availability
+### Warning: Port Availability
 
 Before running this application, ensure that the port you intend to use is not occupied by another process.
 

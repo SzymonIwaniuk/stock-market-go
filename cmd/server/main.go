@@ -10,13 +10,20 @@ import (
 	"time"
 
 	"github.com/szymoniwaniuk/stock-market-go/internal/api"
+	"github.com/szymoniwaniuk/stock-market-go/internal/middleware"
 	"github.com/szymoniwaniuk/stock-market-go/internal/store"
 )
 
 func main() {
 	port := flag.String("port", "8080", "HTTP server port")
 	redisAddr := flag.String("redis", "localhost:6379", "Redis address")
+	logFormat := flag.String("log-format", "json", "Log format: json or text")
 	flag.Parse()
+
+	middleware.SetupLogger(middleware.LoggerConfig{
+		Level:  slog.LevelInfo,
+		Format: *logFormat,
+	})
 
 	slog.Info("starting stock market service", "port", *port, "redis", *redisAddr)
 

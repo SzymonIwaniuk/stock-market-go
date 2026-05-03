@@ -33,8 +33,10 @@ func New(port string, s store.Store) *Api {
 
 func (a *Api) initRouter() {
 	a.Router = chi.NewRouter()
+	a.Router.Use(middleware.RequestID)
 	a.Router.Use(chimw.Recoverer)
 	a.Router.Use(middleware.RequestLogger)
+	a.Router.Use(middleware.ContentTypeJSON)
 
 	walletH := handler.NewWalletHandler(a.Store)
 	stockH := handler.NewStockHandler(a.Store)
