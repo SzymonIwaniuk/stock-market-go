@@ -61,7 +61,6 @@ func (h *WalletHandler) GetWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(wallet)
 }
 
@@ -75,6 +74,5 @@ func (h *WalletHandler) GetWalletStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, qty)
 }
