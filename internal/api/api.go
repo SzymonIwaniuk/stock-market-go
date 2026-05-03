@@ -37,6 +37,7 @@ func (a *Api) initRouter() {
 	a.Router.Use(chimw.Recoverer)
 	a.Router.Use(middleware.RequestLogger)
 	a.Router.Use(middleware.ContentTypeJSON)
+	a.Router.Use(chimw.Timeout(5 * time.Second))
 
 	walletH := handler.NewWalletHandler(a.Store)
 	stockH := handler.NewStockHandler(a.Store)
