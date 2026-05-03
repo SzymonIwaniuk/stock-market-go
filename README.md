@@ -67,28 +67,50 @@ netstat -ano | findstr :<PORT>
 ### 1. Clone the repo
 ```sh
 git clone https://github.com/szymoniwaniuk/stock-market-go.git
-```
-
-### 2. Navigate to repository path
-```sh
 cd stock-market-go
 ```
 
-### 3. Start the application
+### 2. Deploy the application
+
+Cross-platform deployment scripts handle building, starting, and health-checking the service:
+
+#### Linux / macOS
 ```sh
-go run start.go <PORT>
+./deploy.sh 8080
 ```
 
-For example:
+#### Windows (PowerShell)
+```powershell
+.\deploy.ps1 -Port 8080
+```
+
+#### Windows (CMD)
+```cmd
+deploy.bat 8080
+```
+
+#### Using Make
 ```sh
-go run start.go 8080
+make up PORT=8080
 ```
 
 The service will be available at `http://localhost:8080`.
 
-### 4. Stopping the application
+### 3. Stopping the application
 ```sh
-docker compose down
+make down
+```
+
+### 4. Other Make targets
+```sh
+make build       # build Docker images
+make restart     # full restart (down + up)
+make logs        # follow container logs
+make health      # quick health check
+make lint        # run golangci-lint
+make test        # run unit tests
+make e2e-test    # run end-to-end tests
+make clean       # stop containers and remove images
 ```
 
 ## Exposed Endpoints
@@ -228,15 +250,15 @@ curl -X POST http://localhost:8080/chaos
 Uses [miniredis](https://github.com/alicebob/miniredis) — a pure Go in-memory Redis server. No external dependencies needed.
 
 ```sh
-go test -tags unit ./internal/... -v
+make test
 ```
 
 ### End-to-end tests
 
-Requires the service to be running (via `go run start.go <PORT>`). Tests hit the live API using [testify/suite](https://github.com/stretchr/testify).
+Requires the service to be running (via deploy scripts or `make up`). Tests hit the live API using [testify/suite](https://github.com/stretchr/testify).
 
 ```sh
-PORT=8080 go test -tags e2e ./e2e_tests/ -v
+make e2e-test PORT=8080
 ```
 
 ## Technical Details
@@ -256,11 +278,14 @@ PORT=8080 go test -tags e2e ./e2e_tests/ -v
 │   ├── handler/                HTTP handlers (wallet, stock, log, chaos, health, reset)
 │   ├── model/                  Domain types and DTOs
 │   ├── store/                  Store interface + Redis implementation
-│   └── middleware/             Request logging
+│   └── middleware/             Request logging, request ID, content-type
 ├── e2e_tests/                  End-to-end API tests (build tag: e2e)
 ├── nginx/nginx.conf            Nginx reverse proxy config
 ├── docker-compose.yml          3 app instances + nginx + redis
 ├── Dockerfile                  Multi-stage Go build
-├── start.go                    Cross-platform startup command
+├── deploy.sh                   Deploy script for Linux/macOS
+├── deploy.ps1                  Deploy script for Windows (PowerShell)
+├── deploy.bat                  Deploy script for Windows (CMD)
+├── Makefile                    Common development commands
 └── README.md
 ```
