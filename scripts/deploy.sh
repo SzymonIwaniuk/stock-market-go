@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
 PORT="${1:-8080}"
 MAX_RETRIES=30
 RETRY_INTERVAL=2

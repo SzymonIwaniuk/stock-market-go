@@ -76,17 +76,17 @@ Cross-platform deployment scripts handle building, starting, and health-checking
 
 #### Linux / macOS
 ```sh
-./deploy.sh 8080
+./scripts/deploy.sh 8080
 ```
 
 #### Windows (PowerShell)
 ```powershell
-.\deploy.ps1 -Port 8080
+.\scripts\deploy.ps1 -Port 8080
 ```
 
 #### Windows (CMD)
 ```cmd
-deploy.bat 8080
+scripts\deploy.bat 8080
 ```
 
 #### Using Make
@@ -283,9 +283,10 @@ make e2e-test PORT=8080
 ├── nginx/nginx.conf            Nginx reverse proxy config
 ├── docker-compose.yml          3 app instances + nginx + redis
 ├── Dockerfile                  Multi-stage Go build
-├── deploy.sh                   Deploy script for Linux/macOS
-├── deploy.ps1                  Deploy script for Windows (PowerShell)
-├── deploy.bat                  Deploy script for Windows (CMD)
+├── scripts/
+│   ├── deploy.sh               Deploy script for Linux/macOS
+│   ├── deploy.ps1              Deploy script for Windows (PowerShell)
+│   └── deploy.bat              Deploy script for Windows (CMD)
 ├── Makefile                    Common development commands
 └── README.md
 ```

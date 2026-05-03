@@ -2,6 +2,8 @@ param(
     [string]$Port = "8080"
 )
 
+Set-Location (Split-Path -Parent $PSScriptRoot)
+
 $MaxRetries = 30
 $RetryInterval = 2
 

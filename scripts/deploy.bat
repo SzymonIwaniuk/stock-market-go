@@ -1,6 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
 
+cd /d "%~dp0\.."
+
 set PORT=%1
 if "%PORT%"=="" set PORT=8080
 set MAX_RETRIES=30

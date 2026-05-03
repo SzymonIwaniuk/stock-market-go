@@ -74,5 +74,5 @@ func (h *WalletHandler) GetWalletStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprint(w, qty)
+	_, _ = fmt.Fprint(w, qty)
 }
