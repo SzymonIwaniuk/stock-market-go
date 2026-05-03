@@ -23,20 +23,22 @@ Stock Market Service simulates a simplified stock exchange. This service provide
 
 The service runs as 3 identical Go instances behind an Nginx reverse proxy, with shared state in Redis. Docker Compose `restart: always` automatically recovers killed instances.
 
-```
-                     ┌──────────┐
-  localhost:PORT ──▶ │  Nginx   │
-                     └────┬─────┘
-                ┌─────────┼─────────┐
-                ▼         ▼         ▼
-            ┌──────┐  ┌──────┐  ┌──────┐
-            │ App1 │  │ App2 │  │ App3 │
-            └──┬───┘  └──┬───┘  └──┬───┘
-               └──────────┼────────┘
-                          ▼
-                     ┌─────────┐
-                     │  Redis  │
-                     └─────────┘
+```mermaid
+graph TD
+    Client["Client (localhost:PORT)"] --> Nginx["Nginx Load Balancer"]
+    Nginx --> App1["App Instance 1"]
+    Nginx --> App2["App Instance 2"]
+    Nginx --> App3["App Instance 3"]
+    App1 --> Redis["Redis (shared state)"]
+    App2 --> Redis
+    App3 --> Redis
+
+    style Nginx fill:#2d9cdb,stroke:#1a7ab5,color:#fff
+    style App1 fill:#27ae60,stroke:#1e8449,color:#fff
+    style App2 fill:#27ae60,stroke:#1e8449,color:#fff
+    style App3 fill:#27ae60,stroke:#1e8449,color:#fff
+    style Redis fill:#e74c3c,stroke:#c0392b,color:#fff
+    style Client fill:#8e44ad,stroke:#6c3483,color:#fff
 ```
 
 Trade operations (buy/sell) are atomic via Redis Lua scripts, preventing race conditions across instances. Nginx `proxy_next_upstream` automatically retries requests on another instance if one is down.
