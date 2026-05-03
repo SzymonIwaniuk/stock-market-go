@@ -1,10 +1,27 @@
 # Stock Market Service
 
-A simplified stock market REST API built in Go. Wallets can buy and sell stocks from a central Bank, with all successful operations recorded in an audit log.
+A simplified stock market REST API built in Go with Redis as a shared state store. Wallets can buy and sell stocks from a central Bank, with all successful operations recorded in an audit log.
+
+## Table of Contents
+- [About the Project](#about-the-project)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Usage](#usage)
+- [Exposed Endpoints](#exposed-endpoints)
+- [Running Tests](#running-tests)
+- [Technical Details](#technical-details)
+- [Project Structure](#project-structure)
+
+## About the Project
+Stock Market Service simulates a simplified stock exchange. This service provides:
+- **Wallet Management**: Buy and sell stocks from a central bank with atomic operations
+- **High Availability**: 3 app instances behind Nginx — killing one doesn't take down the service
+- **Audit Logging**: All successful wallet operations are recorded in order of occurrence
+- **Cross-Platform**: Single startup command works on Windows, Linux, and macOS (x64 and arm64)
 
 ## Architecture
 
-The service runs as 3 identical Go instances behind an Nginx reverse proxy, with shared state in Redis. This provides high availability — killing any single instance (via `POST /chaos`) doesn't take down the service. Docker Compose `restart: always` automatically recovers killed instances.
+The service runs as 3 identical Go instances behind an Nginx reverse proxy, with shared state in Redis. Docker Compose `restart: always` automatically recovers killed instances.
 
 ```
                      ┌──────────┐
@@ -22,68 +39,107 @@ The service runs as 3 identical Go instances behind an Nginx reverse proxy, with
                      └─────────┘
 ```
 
-Trade operations (buy/sell) are atomic via Redis Lua scripts, preventing race conditions across instances.
+Trade operations (buy/sell) are atomic via Redis Lua scripts, preventing race conditions across instances. Nginx `proxy_next_upstream` automatically retries requests on another instance if one is down.
 
-## Prerequisites
+## Getting Started
+### Prerequisites
+- **Go** runtime (latest version)
+- **Docker** and Docker Compose — follow [this guide](https://docs.docker.com/get-docker/) to install
 
-- Go runtime
-- Docker and Docker Compose
+### ⚠️ Warning: Port Availability
 
-## Quick Start
+Before running this application, ensure that the port you intend to use is not occupied by another process.
 
-```bash
+#### On Linux/macOS:
+```sh
+lsof -i :<PORT>
+```
+#### On Windows (PowerShell):
+```sh
+netstat -ano | findstr :<PORT>
+```
+
+## Usage
+
+### 1. Clone the repo
+```sh
+git clone https://github.com/szymoniwaniuk/stock-market-go.git
+```
+
+### 2. Navigate to repository path
+```sh
+cd stock-market-go
+```
+
+### 3. Start the application
+```sh
 go run start.go <PORT>
 ```
 
 For example:
-
-```bash
+```sh
 go run start.go 8080
 ```
 
-The service will be available at `http://localhost:8080`. Works on Windows, Linux, and macOS (both x64 and arm64).
+The service will be available at `http://localhost:8080`.
 
-To stop:
-
-```bash
+### 4. Stopping the application
+```sh
 docker compose down
 ```
 
-## API Endpoints
+## Exposed Endpoints
 
-### POST /stocks
+### 1. Set bank stock inventory
 
-Set the bank's stock inventory.
+#### **POST** `/stocks`
 
-```bash
+Sets the state of the bank. Returns 200 on success.
+
+Request body:
+```json
+{
+  "stocks": [
+    {"name": "AAPL", "quantity": 10},
+    {"name": "GOOG", "quantity": 5}
+  ]
+}
+```
+
+```sh
 curl -X POST http://localhost:8080/stocks \
   -d '{"stocks":[{"name":"AAPL","quantity":10},{"name":"GOOG","quantity":5}]}'
 ```
 
-### GET /stocks
+### 2. Get current bank state
 
-Get the current bank state.
+#### **GET** `/stocks`
 
-```bash
+Returns current state of the bank.
+
+Response:
+```json
+{
+  "stocks": [
+    {"name": "AAPL", "quantity": 10},
+    {"name": "GOOG", "quantity": 5}
+  ]
+}
+```
+
+```sh
 curl http://localhost:8080/stocks
 ```
 
-Response:
+### 3. Buy or sell a stock
 
+#### **POST** `/wallets/{wallet_id}/stocks/{stock_name}`
+
+Simulates buy or sell of a single stock. Creates the wallet automatically if it doesn't exist. Each operation affects the number of stocks available in the bank.
+
+Request body:
 ```json
-{"stocks":[{"name":"AAPL","quantity":10},{"name":"GOOG","quantity":5}]}
-```
-
-### POST /wallets/{wallet_id}/stocks/{stock_name}
-
-Buy or sell a single stock. Creates the wallet automatically if it doesn't exist.
-
-```bash
-# Buy
-curl -X POST http://localhost:8080/wallets/w1/stocks/AAPL -d '{"type":"buy"}'
-
-# Sell
-curl -X POST http://localhost:8080/wallets/w1/stocks/AAPL -d '{"type":"sell"}'
+{"type": "buy"}
 ```
 
 | Status | Condition |
@@ -92,49 +148,73 @@ curl -X POST http://localhost:8080/wallets/w1/stocks/AAPL -d '{"type":"sell"}'
 | 400 | No stock in bank (buy) or wallet (sell), or invalid type |
 | 404 | Stock doesn't exist in bank registry |
 
-### GET /wallets/{wallet_id}
+```sh
+# Buy
+curl -X POST http://localhost:8080/wallets/w1/stocks/AAPL -d '{"type":"buy"}'
 
-Get a wallet's current holdings.
+# Sell
+curl -X POST http://localhost:8080/wallets/w1/stocks/AAPL -d '{"type":"sell"}'
+```
 
-```bash
+### 4. Get wallet holdings
+
+#### **GET** `/wallets/{wallet_id}`
+
+Returns current state of the particular wallet.
+
+Response:
+```json
+{
+  "id": "w1",
+  "stocks": [
+    {"name": "AAPL", "quantity": 3}
+  ]
+}
+```
+
+```sh
 curl http://localhost:8080/wallets/w1
 ```
 
-Response:
+### 5. Get specific stock quantity in wallet
 
-```json
-{"id":"w1","stocks":[{"name":"AAPL","quantity":3}]}
-```
+#### **GET** `/wallets/{wallet_id}/stocks/{stock_name}`
 
-### GET /wallets/{wallet_id}/stocks/{stock_name}
-
-Get the quantity of a specific stock in a wallet.
-
-```bash
-curl http://localhost:8080/wallets/w1/stocks/AAPL
-```
+Returns quantity of the specified stock in the specified wallet as a single number.
 
 Response: `3`
 
-### GET /log
+```sh
+curl http://localhost:8080/wallets/w1/stocks/AAPL
+```
 
-Get the full audit log of all successful wallet operations, in order.
+### 6. Get audit log
 
-```bash
+#### **GET** `/log`
+
+Returns entire audit log in order of occurrence. Logs only successful operations (max 10,000).
+
+Response:
+```json
+{
+  "log": [
+    {"type": "buy", "wallet_id": "w1", "stock_name": "AAPL"},
+    {"type": "sell", "wallet_id": "w1", "stock_name": "AAPL"}
+  ]
+}
+```
+
+```sh
 curl http://localhost:8080/log
 ```
 
-Response:
+### 7. Chaos endpoint
 
-```json
-{"log":[{"type":"buy","wallet_id":"w1","stock_name":"AAPL"},{"type":"sell","wallet_id":"w1","stock_name":"AAPL"}]}
-```
+#### **POST** `/chaos`
 
-### POST /chaos
+Kills the instance that serves this request. The service remains available through the remaining instances.
 
-Kill the instance that handles this request. The service remains available through the other instances.
-
-```bash
+```sh
 curl -X POST http://localhost:8080/chaos
 ```
 
@@ -142,25 +222,34 @@ curl -X POST http://localhost:8080/chaos
 
 ### Unit tests
 
-Uses [miniredis](https://github.com/alicebob/miniredis) -- a pure Go in-memory Redis server. No external dependencies needed.
+Uses [miniredis](https://github.com/alicebob/miniredis) — a pure Go in-memory Redis server. No external dependencies needed.
 
-```bash
-go test ./... -v
+```sh
+go test -tags unit ./internal/... -v
 ```
 
 ### End-to-end tests
 
 Requires the service to be running (via `go run start.go <PORT>`). Tests hit the live API using [testify/suite](https://github.com/stretchr/testify).
 
-```bash
-PORT=8080 go test ./e2e_tests/ -tags=e2e -v
+```sh
+PORT=8080 go test -tags e2e ./e2e_tests/ -v
 ```
+
+## Technical Details
+
+- **Redis Lua scripts**: Buy and sell operations atomically check preconditions, update bank, update wallet, and append to the audit log in a single Redis operation. This prevents race conditions between concurrent instances.
+- **chi router**: Lightweight, idiomatic Go router with path parameters and middleware support.
+- **No mocks in tests**: Unit tests run against miniredis, exercising the actual store implementation including Lua scripts.
+- **Nginx load balancing**: `proxy_next_upstream` automatically retries requests on another instance if one is down.
+- **Structured error responses**: All error responses return consistent JSON with status code and message.
 
 ## Project Structure
 
 ```
-├── cmd/server/main.go          Entry point, routing, graceful shutdown
+├── cmd/server/main.go          Entry point, flag parsing, graceful shutdown
 ├── internal/
+│   ├── api/                    API struct, router setup, server lifecycle
 │   ├── handler/                HTTP handlers (wallet, stock, log, chaos, health, reset)
 │   ├── model/                  Domain types and DTOs
 │   ├── store/                  Store interface + Redis implementation
@@ -172,11 +261,3 @@ PORT=8080 go test ./e2e_tests/ -tags=e2e -v
 ├── start.go                    Cross-platform startup command
 └── README.md
 ```
-
-## Design Decisions
-
-- **Redis for shared state**: Lightweight, runs in Docker, provides atomic operations via Lua scripts. No external assumptions beyond Docker.
-- **Lua scripts for trades**: Buy and sell operations atomically check preconditions, update bank, update wallet, and append to the audit log in a single Redis operation. This prevents race conditions between concurrent instances.
-- **chi router**: Lightweight, idiomatic Go router with path parameters and middleware support. No heavy frameworks.
-- **No mocks in tests**: Tests run against a real Redis-compatible server (miniredis), exercising the actual store implementation including Lua scripts.
-- **Nginx with `proxy_next_upstream`**: If one app instance is down, nginx automatically retries the request on another instance.
