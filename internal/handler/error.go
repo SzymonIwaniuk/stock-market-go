@@ -9,7 +9,7 @@ import (
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(model.ErrResponse{
+	_ = json.NewEncoder(w).Encode(model.ErrResponse{
 		HTTPStatusCode: status,
 		Message:        msg,
 	})

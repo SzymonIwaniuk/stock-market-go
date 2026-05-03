@@ -23,5 +23,5 @@ func (h *LogHandler) GetLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(model.LogResponse{Log: entries})
+	_ = json.NewEncoder(w).Encode(model.LogResponse{Log: entries})
 }

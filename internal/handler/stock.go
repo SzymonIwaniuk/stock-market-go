@@ -23,7 +23,7 @@ func (h *StockHandler) GetStocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(model.BankState{Stocks: stocks})
+	_ = json.NewEncoder(w).Encode(model.BankState{Stocks: stocks})
 }
 
 func (h *StockHandler) SetStocks(w http.ResponseWriter, r *http.Request) {

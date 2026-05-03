@@ -61,7 +61,7 @@ func (h *WalletHandler) GetWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(wallet)
+	_ = json.NewEncoder(w).Encode(wallet)
 }
 
 func (h *WalletHandler) GetWalletStock(w http.ResponseWriter, r *http.Request) {
